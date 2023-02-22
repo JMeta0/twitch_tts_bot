@@ -1,0 +1,3 @@
+- rename read_token to something better
+- pipeline read_token so it tries to: read file, validate if token from file still works, refresh it if it is needed. If any of the steps fails, just generate new oauth token
+- better handling of keeping token fresh. Current solution creates a lock so "Press enter to stop" doesn't work

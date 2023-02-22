@@ -1,0 +1,5 @@
+[twitch]
+channel = my_channel_name
+client_id = 1234clientid1234
+client_secret = 1234clientsecret1234
+auth_file = tokens.tmp
