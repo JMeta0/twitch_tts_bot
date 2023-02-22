@@ -53,13 +53,11 @@ async def read_token(twitch: dict):
         await twitch.set_user_authentication(token, USER_SCOPE, refresh_token)
 
         expiration = await validate_token(twitch)
-        print(f"Token expires in: {time_format(expiration)}")
         return twitch, expiration
     else:
         raise Exception("No token file found")
 
 async def validate_token(twitch: dict):
-    print("Validating token")
     token = str(twitch._Twitch__user_auth_token)
     try:
         response = requests.get("https://id.twitch.tv/oauth2/validate", headers={f"Authorization": f"OAuth {token}"})

@@ -3,17 +3,20 @@ import configparser
 import os
 import re
 import urllib.parse
-
+from platform import system
+from simpleSound import play
 from twitchAPI import Twitch
 from twitchAPI.chat import Chat, ChatCommand, ChatMessage, ChatSub, EventData
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope, ChatEvent
 
+from time_formatter import time_format
 from oauth import generate_token, read_token, refresh_token, validate_token
 
 # Read config
 config = configparser.ConfigParser()
 config.read('config.txt')
+system=system()
 
 # Set values
 APP_ID = config['twitch']['client_id']
@@ -21,7 +24,6 @@ APP_SECRET = config['twitch']['client_secret']
 TARGET_CHANNEL = config['twitch']['channel']
 USER_SCOPE = [AuthScope.CHAT_READ]
 AUTH_FILE=config['twitch']['auth_file']
-
 # this will be called when the event READY is triggered, which will be on bot start
 async def on_ready(ready_event: EventData):
     print('Joining channels')
@@ -38,7 +40,13 @@ async def on_message(msg: ChatMessage):
     print(f'{msg.user.name} said: {msg.text}')
 
     url = "http://localhost:5002/api/tts?text=" + urllib.parse.quote_plus(msg.text)
-    os.system('curl -s "' + url + '" --get --output - | aplay -q')
+
+    if system == "Windows":
+        os.system('curl -s "' + url + '" -o output.wav')
+        play("./output.wav")
+        os.remove("./output.wav")
+    if system == "Linux":
+        os.system('curl -s "' + url + '" --get --output - | aplay -q')
 
 # this is where we set up the bot
 async def run_chat():
@@ -49,7 +57,7 @@ async def run_chat():
     # Handle authentication
     try:
         authenticated_twitch, expiration = await read_token(twitch)
-        print(f"Testing if {str(twitch._Twitch__user_auth_token)} expiration: {expiration}")
+        print(f"Validating token. Expires in: {time_format(expiration)}")
         if expiration < 5400:
             try:
                 authenticated_twitch = await refresh_token(twitch)
@@ -70,27 +78,27 @@ async def run_chat():
     chat.register_event(ChatEvent.MESSAGE, on_message)
     # listen to channel subscriptions
     # we are done with our setup, lets start this bot up!
+
     chat.start()
     ## Attempt to check if new token will be used
-    while True:
-        await asyncio.sleep(3600)
-        expiration = await validate_token(twitch)
-        print(f"Checking token {str(twitch._Twitch__user_auth_token)}. Expires in {expiration}")
-        if expiration < 5400:
-            "Refreshing token"
-            try:
-                authenticated_twitch = await refresh_token(twitch)
-            except Exception as e1:
-                print(f"Refreshing token failed: {e1}")
-                authenticated_twitch = await generate_token(twitch, auth)
-            chat = await Chat(authenticated_twitch)
-    # lets run till we press enter in the console
     try:
-        input('press ENTER to stop\n')
+        while True:
+            await asyncio.sleep(3600)
+            expiration = await validate_token(twitch)
+            print(f"Validating token. Expires in {time_format(expiration)}")
+            if expiration < 5400:
+                print("Refreshing token")
+                try:
+                    authenticated_twitch = await refresh_token(twitch)
+                except Exception as e1:
+                    print(f"Refreshing token failed: {e1}")
+                    authenticated_twitch = await generate_token(twitch, auth)
+                chat = await Chat(authenticated_twitch)
+    except KeyboardInterrupt:
+        print("Received exit, exiting")
     finally:
-        # now we can close the chat bot and the twitch api client
-        chat.stop()
+        # stopping both eventsub as well as gracefully closing the connection to the API
+        await chat.stop()
         await twitch.close()
-
 # lets run our setup
 asyncio.run(run_chat())
