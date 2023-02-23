@@ -6,7 +6,7 @@ import urllib.parse
 from platform import system
 from simpleSound import play
 from twitchAPI import Twitch
-from twitchAPI.chat import Chat, ChatCommand, ChatMessage, ChatSub, EventData
+from twitchAPI.chat import Chat, ChatMessage, EventData
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope, ChatEvent
 
@@ -22,7 +22,7 @@ system=system()
 APP_ID = config['twitch']['client_id']
 APP_SECRET = config['twitch']['client_secret']
 TARGET_CHANNEL = config['twitch']['channel']
-USER_SCOPE = [AuthScope.CHAT_READ]
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
 AUTH_FILE=config['twitch']['auth_file']
 # this will be called when the event READY is triggered, which will be on bot start
 async def on_ready(ready_event: EventData):
