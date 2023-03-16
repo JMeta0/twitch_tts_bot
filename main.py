@@ -1,5 +1,5 @@
 import asyncio
-import configparser
+from config_pyrser import manager, fields, Config
 import os
 import sys
 import re
@@ -23,17 +23,31 @@ import time
 from functools import partial
 from oauth import generate_token, read_token
 from fixNumbers import fix_numbers
+
+# Meme config
+class Twitch_config(manager.Section):
+    channel = fields.Field()
+    client_id = fields.Field()
+    client_secret = fields.Field()
+    auth_file = fields.Field()
+class Tts_config(manager.Section):
+    reward_name = fields.Field()
+
+class Config(manager.Config):
+    twitch = Twitch_config()
+    tts = Tts_config()
+
+cfg = Config(path='config.txt')
+
 # Read config
-config = configparser.ConfigParser()
-config.read('config.txt')
+APP_ID = cfg.twitch.client_id
+APP_SECRET = cfg.twitch.client_secret
+TARGET_CHANNEL = cfg.twitch.channel
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
+AUTH_FILE = cfg.twitch.auth_file
+REWARD_NAME = cfg.tts.reward_name
 system=system()
 
-# Set values
-APP_ID = config['twitch']['client_id']
-APP_SECRET = config['twitch']['client_secret']
-TARGET_CHANNEL = config['twitch']['channel']
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
-AUTH_FILE=config['twitch']['auth_file']
 # Logs
 log = logging.getLogger()
 if "debug".lower() in sys.argv:
@@ -48,7 +62,7 @@ async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -
     message = callback["data"]["redemption"]["user_input"]
     sender = callback["data"]["redemption"]["user"]["display_name"]
 
-    if callback["data"]["redemption"]["reward"]["title"] == config['tts']['reward_name']:
+    if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
         message=fix_numbers(message)
         if not bool(re.match(".*(\.|!|\?)$", message)):
             message+="."
