@@ -14,7 +14,7 @@ config.read('config.txt')
 APP_ID = config['twitch']['client_id']
 APP_SECRET = config['twitch']['client_secret']
 TARGET_CHANNEL = config['twitch']['channel']
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS, AuthScope.WHISPERS_READ]
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
 AUTH_FILE=config['twitch']['auth_file']
 
 # Functions
