@@ -102,8 +102,8 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         callback = partial(callback_wrapped, sound_queue)
         uuid = await pubsub.listen_channel_points(user.id, callback)
 
-        # Loop so function won't die
         print("Ready")
+        # Loop so function won't die
         while True:
             await asyncio.sleep(3600)
 
