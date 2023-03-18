@@ -1,43 +1,26 @@
 import asyncio
-from config_pyrser import manager, fields, Config
 import os
 import sys
 import re
 import urllib.parse
 from platform import system
 from simpleSound import play
-from twitchAPI import Twitch
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.types import AuthScope
 from twitchAPI.pubsub import PubSub
 from twitchAPI.twitch import Twitch
 from twitchAPI.helper import first
-from twitchAPI.types import AuthScope
-from twitchAPI.oauth import UserAuthenticator
-import asyncio
 import json
 from uuid import UUID
-from oauth import generate_token, read_token
 import logging
 import time
 from functools import partial
 from oauth import generate_token, read_token
 from fixNumbers import fix_numbers
+from parsedConfig import parsed_config
 
 # Meme config
-class Twitch_config(manager.Section):
-    channel = fields.Field()
-    client_id = fields.Field()
-    client_secret = fields.Field()
-    auth_file = fields.Field()
-class Tts_config(manager.Section):
-    reward_name = fields.Field()
-
-class Config(manager.Config):
-    twitch = Twitch_config()
-    tts = Tts_config()
-
-cfg = Config(path='config.txt')
+cfg = parsed_config()
 
 # Read config
 APP_ID = cfg.twitch.client_id
@@ -46,7 +29,7 @@ TARGET_CHANNEL = cfg.twitch.channel
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
 AUTH_FILE = cfg.twitch.auth_file
 REWARD_NAME = cfg.tts.reward_name
-system=system()
+system = system()
 
 # Logs
 log = logging.getLogger()
@@ -57,30 +40,32 @@ else:
 
 logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%X")
 
+
 async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
     callback = json.loads(json.dumps(data, indent=2))
     message = callback["data"]["redemption"]["user_input"]
     sender = callback["data"]["redemption"]["user"]["display_name"]
 
     if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
-        message=fix_numbers(message)
+        message = fix_numbers(message)
         if not bool(re.match(".*(\.|!|\?)$", message)):
-            message+="."
+            message += "."
         print(f'{sender} said: {message}')
 
         url = "http://localhost:5002/api/tts?text=" + urllib.parse.quote_plus(message)
         await sound_queue.put(url)
         log.debug(f'soundPlay - Added {url} to queue. Queue size: {sound_queue.qsize()}')
 
+
 async def soundPlay(sound_queue, cancel_event):
     while True:
         try:
-            log.debug(f'soundPlay - waiting for item in queue.')
+            log.debug('soundPlay - waiting for item in queue.')
             url = await asyncio.wait_for(sound_queue.get(), timeout=60)
             log.debug(f'soundPlay - Executing {url} from queue. Queue size: {sound_queue.qsize()}')
 
             if system == 'Windows':
-                log.debug(f'Executing task.')
+                log.debug('Executing task.')
                 fileName = f"output-{time.time()}.wav"
                 os.system(f'curl -s {url} -o {fileName}')
                 play(f'./{fileName}')
@@ -95,6 +80,7 @@ async def soundPlay(sound_queue, cancel_event):
             log.error('soundPlay - Received exit, exiting')
             cancel_event.set()
             return
+
 
 async def run_chat(sound_queue: asyncio.Queue, cancel_event):
     try:
@@ -120,7 +106,8 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         # Loop so function won't die
         while True:
             await asyncio.sleep(3600)
-
+            token = await twitch.get_refreshed_user_auth_token()
+            log.debug(f"Refreshing - {token}")
             # TODO Re add saving token to file
     except KeyboardInterrupt:
         cancel_event.set()
@@ -130,6 +117,7 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         await pubsub.unlisten(uuid)
         pubsub.stop()
         await twitch.close()
+
 
 async def main(cancel_event):
     sound_queue = asyncio.Queue()
@@ -144,13 +132,14 @@ async def main(cancel_event):
         sound_task.cancel()
         await asyncio.gather(chat_task, sound_task, return_exceptions=True)
 
+
 # Main thread
 loop = asyncio.get_event_loop()
 try:
     cancel_event = asyncio.Event()
     asyncio.run(main(cancel_event))
 except KeyboardInterrupt:
-    log.error("Caught keyboard interrupt. Canceling tasks...")
+    log.info("Caught keyboard interrupt. Canceling tasks...")
     cancel_event.set()
 finally:
     log.info("Cleaning up...")

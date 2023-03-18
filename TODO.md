@@ -1,2 +1,2 @@
-- better debug logs?
+- fix logging from twitchAPI modules so they are silent, but everything in main.py is using logger.INFO
 - add token validation and saving to file
