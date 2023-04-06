@@ -61,7 +61,7 @@ async def soundPlay(sound_queue, cancel_event):
     while True:
         try:
             log.debug('soundPlay - waiting for item in queue.')
-            url = await asyncio.wait_for(sound_queue.get(), timeout=60)
+            url = await asyncio.wait_for(sound_queue.get(), timeout=1)
             log.debug(f'soundPlay - Executing {url} from queue. Queue size: {sound_queue.qsize()}')
 
             if system == 'Windows':
