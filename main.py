@@ -1,27 +1,21 @@
 import asyncio
-import os
+import json
+import logging
 import sys
-import re
-import urllib.parse
+from clean_tmp import clean_tmp
+from functools import partial
+from list_sounds import list_sounds
+from oauth import generate_token, read_token
+from parsed_config import parsed_config
 from platform import system
-from simpleSound import play
+from sound_play import sound_play
+from twitchAPI.helper import first
 from twitchAPI.oauth import UserAuthenticator
-from twitchAPI.types import AuthScope
 from twitchAPI.pubsub import PubSub
 from twitchAPI.twitch import Twitch
-from twitchAPI.helper import first
-import json
+from twitchAPI.types import AuthScope
 from uuid import UUID
-import logging
-import time
-from functools import partial
-from oauth import generate_token, read_token
-from fixNumbers import fix_numbers
-from split_message import split_message
-from list_sounds import list_sounds
-from parsedConfig import parsed_config
-from pydub import AudioSegment
-from clean_tmp import clean_tmp
+
 
 # Meme config
 cfg = parsed_config()
@@ -30,7 +24,7 @@ cfg = parsed_config()
 APP_ID = cfg.twitch.client_id
 APP_SECRET = cfg.twitch.client_secret
 TARGET_CHANNEL = cfg.twitch.channel
-USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS]
+USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS, AuthScope.WHISPERS_READ]
 AUTH_FILE = cfg.twitch.auth_file
 REWARD_NAME = cfg.tts.reward_name
 system = system()
@@ -53,7 +47,7 @@ async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -
     if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
         print(f'{sender} said: {message}')
         await sound_queue.put(message)
-        log.debug(f'soundPlay - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+        log.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
 
 
 async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
@@ -61,67 +55,7 @@ async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: di
     message = callback["data_object"]["body"]
 
     await sound_queue.put(message)
-    log.debug(f'soundPlay - Added {message} to queue. Queue size: {sound_queue.qsize()}')
-
-
-async def soundPlay(sound_queue, cancel_event):
-    while True:
-        try:
-            log.debug('soundPlay - waiting for item in queue.')
-
-            message = await asyncio.wait_for(sound_queue.get(), timeout=1)
-            log.debug(f'soundPlay - Executing {message} from queue. Queue size: {sound_queue.qsize()}')
-
-            # Split message and potential sounds,
-            sentence_array = split_message(message)
-            log.debug(f"sentence_array - {sentence_array}")
-            wavs = []
-            log.debug(f"working on sentences - {sentence_array}")
-
-            for index, sentence in enumerate(sentence_array):
-                if sentence_array[index] in sounds_list:
-                    log.debug("found sentence in sounds array")
-                    wavs.append(f'sounds/{sentence[1:-1]}.wav')
-                else:
-                    # Fix numbers
-                    sentence = fix_numbers(sentence)
-                    # Add symbol at message end if it doesn't exist
-                    if not bool(re.match(".*(\.|!|\?)$", sentence)):
-                        sentence += "."
-
-                    log.debug(sentence)
-
-                    url = f"http://localhost:5002/api/tts?text={urllib.parse.quote_plus(sentence)}"
-                    os.system(f'curl -s {url} -o tmp/{index}.wav')
-                    wavs.append(f'tmp/{index}.wav')
-            log.debug(f"soundPlay - files are {wavs}")
-
-            combined_sounds = AudioSegment.empty()
-            log.debug("soundPlay - combining output")
-            for path in wavs:
-                combined_sounds += AudioSegment.from_wav(path)
-            log.debug("soundPlay - exporting output")
-            combined_sounds.export("output.wav", format="wav")
-
-            # Play
-            if system == 'Windows':
-                log.debug(f'soundPlay - Playing sound on {system}')
-                play('./output.wav')
-                os.remove('./output.wav')
-            if system == 'Linux':
-                log.debug(f'soundPlay - Playing sound on {system}')
-                os.system('aplay -q ./output.wav')
-                os.remove('./output.wav')
-            clean_tmp()
-            # Remove item from queue
-            sound_queue.task_done()
-            log.debug(f'soundPlay - Task done. Queue size: {sound_queue.qsize()}')
-        except asyncio.TimeoutError:
-            pass
-        except KeyboardInterrupt:
-            log.error('soundPlay - Received exit, exiting')
-            cancel_event.set()
-            return
+    log.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
 
 
 async def run_chat(sound_queue: asyncio.Queue, cancel_event):
@@ -141,12 +75,12 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         pubsub = PubSub(authenticated_twitch)
         pubsub.start()
 
-        # callback = partial(callback_wrapped, sound_queue)
-        # uuid = await pubsub.listen_channel_points(user.id, callback)
+        callback = partial(callback_wrapped, sound_queue)
+        uuid = await pubsub.listen_channel_points(user.id, callback)
 
-        # Whispers for test
-        callback = partial(callback_wrapped_priv, sound_queue)
-        uuid = await pubsub.listen_whispers(user.id, callback)
+        # Whispers for debug
+        # callback = partial(callback_wrapped_priv, sound_queue)
+        # uuid = await pubsub.listen_whispers(user.id, callback)
 
         print("Ready")
         # Loop so function won't die
@@ -165,11 +99,11 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         await twitch.close()
 
 
-async def main(cancel_event):
+async def main(cancel_event, sounds_list):
     sound_queue = asyncio.Queue()
 
     chat_task = asyncio.create_task(run_chat(sound_queue, cancel_event))
-    sound_task = asyncio.create_task(soundPlay(sound_queue, cancel_event))
+    sound_task = asyncio.create_task(sound_play(sound_queue, cancel_event, sounds_list))
 
     try:
         await asyncio.wait([chat_task, sound_task], return_when=asyncio.ALL_COMPLETED)
@@ -185,7 +119,7 @@ sounds_list = list_sounds()
 loop = asyncio.get_event_loop()
 try:
     cancel_event = asyncio.Event()
-    asyncio.run(main(cancel_event))
+    asyncio.run(main(cancel_event, sounds_list))
 except KeyboardInterrupt:
     log.info("Caught keyboard interrupt. Canceling tasks...")
     cancel_event.set()
