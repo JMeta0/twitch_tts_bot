@@ -17,7 +17,11 @@ import time
 from functools import partial
 from oauth import generate_token, read_token
 from fixNumbers import fix_numbers
+from split_message import split_message
+from list_sounds import list_sounds
 from parsedConfig import parsed_config
+from pydub import AudioSegment
+from clean_tmp import clean_tmp
 
 # Meme config
 cfg = parsed_config()
@@ -47,31 +51,69 @@ async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -
     sender = callback["data"]["redemption"]["user"]["display_name"]
 
     if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
-        message = fix_numbers(message)
-        if not bool(re.match(".*(\.|!|\?)$", message)):
-            message += "."
         print(f'{sender} said: {message}')
+        await sound_queue.put(message)
+        log.debug(f'soundPlay - Added {message} to queue. Queue size: {sound_queue.qsize()}')
 
-        url = "http://localhost:5002/api/tts?text=" + urllib.parse.quote_plus(message)
-        await sound_queue.put(url)
-        log.debug(f'soundPlay - Added {url} to queue. Queue size: {sound_queue.qsize()}')
+
+async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
+    callback = json.loads(json.dumps(data))
+    message = callback["data_object"]["body"]
+
+    await sound_queue.put(message)
+    log.debug(f'soundPlay - Added {message} to queue. Queue size: {sound_queue.qsize()}')
 
 
 async def soundPlay(sound_queue, cancel_event):
     while True:
         try:
             log.debug('soundPlay - waiting for item in queue.')
-            url = await asyncio.wait_for(sound_queue.get(), timeout=1)
-            log.debug(f'soundPlay - Executing {url} from queue. Queue size: {sound_queue.qsize()}')
 
+            message = await asyncio.wait_for(sound_queue.get(), timeout=1)
+            log.debug(f'soundPlay - Executing {message} from queue. Queue size: {sound_queue.qsize()}')
+
+            # Split message and potential sounds,
+            sentence_array = split_message(message)
+            log.debug(f"sentence_array - {sentence_array}")
+            wavs = []
+            log.debug(f"working on sentences - {sentence_array}")
+
+            for index, sentence in enumerate(sentence_array):
+                if sentence_array[index] in sounds_list:
+                    log.debug("found sentence in sounds array")
+                    wavs.append(f'sounds/{sentence[1:-1]}.wav')
+                else:
+                    # Fix numbers
+                    sentence = fix_numbers(sentence)
+                    # Add symbol at message end if it doesn't exist
+                    if not bool(re.match(".*(\.|!|\?)$", sentence)):
+                        sentence += "."
+
+                    log.debug(sentence)
+
+                    url = f"http://localhost:5002/api/tts?text={urllib.parse.quote_plus(sentence)}"
+                    os.system(f'curl -s {url} -o tmp/{index}.wav')
+                    wavs.append(f'tmp/{index}.wav')
+            log.debug(f"soundPlay - files are {wavs}")
+
+            combined_sounds = AudioSegment.empty()
+            log.debug("soundPlay - combining output")
+            for path in wavs:
+                combined_sounds += AudioSegment.from_wav(path)
+            log.debug("soundPlay - exporting output")
+            combined_sounds.export("output.wav", format="wav")
+
+            # Play
             if system == 'Windows':
-                log.debug('Executing task.')
-                fileName = f"output-{time.time()}.wav"
-                os.system(f'curl -s {url} -o {fileName}')
-                play(f'./{fileName}')
-                os.remove(f'./{fileName}')
+                log.debug(f'soundPlay - Playing sound on {system}')
+                play('./output.wav')
+                os.remove('./output.wav')
             if system == 'Linux':
-                os.system(f'curl -s {url} --get --output - | aplay -q')
+                log.debug(f'soundPlay - Playing sound on {system}')
+                os.system('aplay -q ./output.wav')
+                os.remove('./output.wav')
+            clean_tmp()
+            # Remove item from queue
             sound_queue.task_done()
             log.debug(f'soundPlay - Task done. Queue size: {sound_queue.qsize()}')
         except asyncio.TimeoutError:
@@ -99,8 +141,12 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
         pubsub = PubSub(authenticated_twitch)
         pubsub.start()
 
-        callback = partial(callback_wrapped, sound_queue)
-        uuid = await pubsub.listen_channel_points(user.id, callback)
+        # callback = partial(callback_wrapped, sound_queue)
+        # uuid = await pubsub.listen_channel_points(user.id, callback)
+
+        # Whispers for test
+        callback = partial(callback_wrapped_priv, sound_queue)
+        uuid = await pubsub.listen_whispers(user.id, callback)
 
         print("Ready")
         # Loop so function won't die
@@ -134,6 +180,8 @@ async def main(cancel_event):
 
 
 # Main thread
+clean_tmp()
+sounds_list = list_sounds()
 loop = asyncio.get_event_loop()
 try:
     cancel_event = asyncio.Event()
