@@ -9,6 +9,7 @@ from platform import system
 from pydub import AudioSegment
 from simpleSound import play
 from split_message import split_message
+import urllib
 
 # Logs
 log = logging.getLogger()
@@ -18,6 +19,7 @@ else:
     log_level = logging.ERROR
 
 logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%X")
+system = system()
 
 
 async def sound_play(sound_queue, cancel_event, sounds_list):
@@ -48,7 +50,8 @@ async def sound_play(sound_queue, cancel_event, sounds_list):
                     log.debug(sentence)
 
                     url = f"http://localhost:5002/api/tts?text={urllib.parse.quote_plus(sentence)}"
-                    os.system(f'curl -s {url} -o tmp/{index}.wav')
+                    os.system(f'curl.exe -s {url} -o tmp/{index}.wav')
+
                     wavs.append(f'tmp/{index}.wav')
             log.debug(f"sound_play - files are {wavs}")
 

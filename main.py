@@ -41,21 +41,27 @@ logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%
 
 async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
     callback = json.loads(json.dumps(data, indent=2))
-    message = callback["data"]["redemption"]["user_input"]
-    sender = callback["data"]["redemption"]["user"]["display_name"]
-
-    if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
-        print(f'{sender} said: {message}')
-        await sound_queue.put(message)
-        log.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+    try:
+        message = callback["data"]["redemption"]["user_input"]
+        sender = callback["data"]["redemption"]["user"]["display_name"]
+        if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
+            print(f'{sender} said: {message}')
+            await sound_queue.put(message)
+            log.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+    except KeyError:
+        log.error('callback_wrapped - Error in message Body')
+        return
 
 
 async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
-    callback = json.loads(json.dumps(data))
-    message = callback["data_object"]["body"]
-
-    await sound_queue.put(message)
-    log.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+    try:
+        callback = json.loads(json.dumps(data))
+        message = callback["data_object"]["body"]
+        await sound_queue.put(message)
+        log.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+    except KeyError:
+        log.error('callback_wrapped_priv - Error in message Body')
+        return
 
 
 async def run_chat(sound_queue: asyncio.Queue, cancel_event):
@@ -106,11 +112,10 @@ async def main(cancel_event, sounds_list):
     sound_task = asyncio.create_task(sound_play(sound_queue, cancel_event, sounds_list))
 
     try:
-        await asyncio.wait([chat_task, sound_task], return_when=asyncio.ALL_COMPLETED)
+        await asyncio.gather(chat_task, sound_task, return_exceptions=True)
     finally:
         chat_task.cancel()
         sound_task.cancel()
-        await asyncio.gather(chat_task, sound_task, return_exceptions=True)
 
 
 # Main thread
