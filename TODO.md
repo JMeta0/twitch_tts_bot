@@ -1,2 +1,1 @@
-- fix logging from twitchAPI modules so they are silent, but everything in main.py is using logger.INFO
-- add token validation and saving to file
+- fix random PubSubListenTimeoutException - asyncio - Task exception was never retrieved - pubsub.py:343
