@@ -24,7 +24,7 @@ logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%
 system = system()
 
 
-async def sound_play(sound_queue, cancel_event, sounds_list):
+async def sound_play(sound_queue, sounds_list):
     while True:
         try:
             log.debug('sound_play - waiting for item in queue.')
@@ -79,7 +79,3 @@ async def sound_play(sound_queue, cancel_event, sounds_list):
             log.debug(f'sound_play - Task done. Queue size: {sound_queue.qsize()}')
         except asyncio.TimeoutError:
             pass
-        except KeyboardInterrupt:
-            log.error('sound_play - Received exit, exiting')
-            cancel_event.set()
-            return

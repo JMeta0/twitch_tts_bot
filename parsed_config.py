@@ -1,8 +1,10 @@
 from config_pyrser import manager, fields
-
+from os import path
 
 config_path = 'config.txt'
-
+if not path.exists(config_path):
+    print(f'{config_path} not found - copy and input correct data to config file!')
+    input("Press enter to proceed...")
 
 def parsed_config():
     # Meme config

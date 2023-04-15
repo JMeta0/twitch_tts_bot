@@ -1,6 +1,7 @@
 import json
+import sys
 import os
-
+import logging
 from config_pyrser import MissingFieldError
 from parsed_config import parsed_config, parsed_tokens
 import requests
@@ -17,36 +18,41 @@ USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS, AuthScope
 AUTH_FILE = cfg.twitch.auth_file
 REWARD_NAME = cfg.tts.reward_name
 
+# Logs
+log = logging.getLogger()
+if "debug".lower() in sys.argv:
+    log_level = logging.DEBUG
+elif "info".lower() in sys.argv:
+    log_level = logging.INFO
+else:
+    log_level = logging.ERROR
 
-# Functions
+logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%X")
+
 
 def save_token(new_token, new_refresh_token):
-    # Save them to file
-    f = open(AUTH_FILE, "w")
-    f.write("[auth]\n")
-    f.write(f"token = {new_token}\n")
-    f.write(f"refresh_token = {new_refresh_token}")
-    f.close()
+    log.debug("oauth - save_token - Saving token to file")
+    with open(AUTH_FILE, "w") as f:
+        f.write("[auth]\n")
+        f.write(f"token = {new_token}\n")
+        f.write(f"refresh_token = {new_refresh_token}")
 
 
-async def generate_token(twitch: dict, auth: dict):
+async def generate_token(twitch, auth):
     print("Generating new token")
-    # Get token and refresh token
     try:
         token, refresh_token = await auth.authenticate()
     except Exception as e:
         raise Exception(f"Failed to generate new token: {e}")
         exit(1)
     await twitch.set_user_authentication(token, USER_SCOPE, refresh_token)
-    # Save them to file
     save_token(token, refresh_token)
     print("Successfully generated new token")
     return twitch
 
 
-async def read_token(twitch: dict):
+async def read_token(twitch):
     if os.path.isfile(AUTH_FILE):
-        # Read token and refresh_token from file
         auth = parsed_tokens(cfg.twitch.auth_file)
         try:
             token = auth.auth.token
@@ -54,16 +60,15 @@ async def read_token(twitch: dict):
             print(f'Successfully read {AUTH_FILE}')
         except (KeyError, MissingFieldError):
             print(f'{AUTH_FILE} is malformed')
-        # Set them
-        await twitch.set_user_authentication(token, USER_SCOPE, refresh_token)
 
+        await twitch.set_user_authentication(token, USER_SCOPE, refresh_token)
         expiration = await validate_token(twitch)
         return twitch, expiration
     else:
         raise Exception("No token file found")
 
 
-async def validate_token(twitch: dict):
+async def validate_token(twitch):
     token = str(twitch._Twitch__user_auth_token)
     try:
         response = requests.get(

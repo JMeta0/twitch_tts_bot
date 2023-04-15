@@ -1,11 +1,11 @@
 import asyncio
-import json
 import logging
 import sys
+from os import makedirs, path
 from clean_tmp import clean_tmp
 from functools import partial
 from list_sounds import list_sounds
-from oauth import generate_token, read_token
+from oauth import generate_token, read_token, save_token
 from parsed_config import parsed_config
 from platform import system
 from sound_play import sound_play
@@ -13,9 +13,9 @@ from twitchAPI.helper import first
 from twitchAPI.oauth import UserAuthenticator
 from twitchAPI.pubsub import PubSub
 from twitchAPI.twitch import Twitch
-from twitchAPI.types import AuthScope
+from twitchAPI.types import AuthScope, PubSubListenTimeoutException
 from uuid import UUID
-from twitchAPI.types import PubSubListenTimeoutException
+import subprocess
 
 # Meme config
 cfg = parsed_config()
@@ -31,51 +31,50 @@ system = system()
 
 # Logs
 log = logging.getLogger()
-if "debug".lower() in sys.argv:
+if 'debug'.lower() in sys.argv:
     log_level = logging.DEBUG
-elif "info".lower() in sys.argv:
+elif 'info'.lower() in sys.argv:
     log_level = logging.INFO
 else:
     log_level = logging.ERROR
 
-logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%X")
+logging.basicConfig(level=log_level, format='%(name)s - %(message)s', datefmt='%X')
 
 
 async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
-    callback = json.loads(json.dumps(data, indent=2))
     try:
-        message = callback["data"]["redemption"]["user_input"]
-        sender = callback["data"]["redemption"]["user"]["display_name"]
-        if callback["data"]["redemption"]["reward"]["title"] == REWARD_NAME:
+        message = data['data']['redemption']['user_input']
+        sender = data['data']['redemption']['user']['display_name']
+        if data['data']['redemption']['reward']['title'] == REWARD_NAME:
             print(f'{sender} said: {message}')
             await sound_queue.put(message)
             log.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
     except KeyError:
         log.error('callback_wrapped - Error in message Body')
-        return
 
 
 async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
     try:
-        callback = json.loads(json.dumps(data))
-        message = callback["data_object"]["body"]
+        message = data['data_object']['body']
         await sound_queue.put(message)
         log.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
     except KeyError:
         log.error('callback_wrapped_priv - Error in message Body')
-        return
 
 
-async def run_chat(sound_queue: asyncio.Queue, cancel_event):
+async def run_chat(sound_queue: asyncio.Queue):
     while True:
         try:
             twitch = await Twitch(APP_ID, APP_SECRET)
             auth = UserAuthenticator(twitch, USER_SCOPE)
             user = await first(twitch.get_users(logins=TARGET_CHANNEL))
 
+            # Save token on refresh
+            twitch.user_auth_refresh_callback = save_token
+
             # Handle authentication
             try:
-                authenticated_twitch, expiration = await read_token(twitch)
+                authenticated_twitch, _ = await read_token(twitch)
             except Exception as e:
                 log.error(e)
                 authenticated_twitch = await generate_token(twitch, auth)
@@ -85,44 +84,64 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
             pubsub.start()
 
             # callback = partial(callback_wrapped, sound_queue)
-            # uuid = await pubsub.listen_channel_points(user.id, callback)
+            # await pubsub.listen_channel_points(user.id, callback)
 
             # Whispers for debug
             callback = partial(callback_wrapped_priv, sound_queue)
-            uuid = await pubsub.listen_whispers(user.id, callback)
+            await pubsub.listen_whispers(user.id, callback)
 
-            print("Ready")
+            print('Ready')
             # Loop so function won't die
             while True:
                 await asyncio.sleep(3600)
-                # TODO Re add saving token to file
         except PubSubListenTimeoutException:
             pubsub.stop()
             await twitch.close()
-            print("run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...")
+            log.error('run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...')
+        except asyncio.CancelledError:
+            pubsub.stop()
+            await twitch.close()
+            break
 
 
-async def main(cancel_event, sounds_list):
+async def main(sounds_list):
     sound_queue = asyncio.Queue()
 
-    chat_task = asyncio.create_task(run_chat(sound_queue, cancel_event))
-    sound_task = asyncio.create_task(sound_play(sound_queue, cancel_event, sounds_list))
+    chat_task = asyncio.create_task(run_chat(sound_queue))
+    sound_task = asyncio.create_task(sound_play(sound_queue, sounds_list))
 
-    try:
-        await asyncio.gather(chat_task, sound_task, return_exceptions=True)
-    except PubSubListenTimeoutException:
-        print("main - Caught PubSubListenTimeoutException. Attempting to reconnect...")
+    tasks = [chat_task, sound_task]
+
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
-# Main thread
+# Main thread #
+
+# Check folders and config existance
+dir_paths = ["sounds", "tmp"]
+for dir_path in dir_paths:
+    if not path.exists(dir_path):
+        makedirs(dir_path)
+if not path.exists('ffmpeg.exe'):
+    log.error('ffmpeg.exe not found - add to path or download ffmpeg to this folder!')
+    input("Press enter to proceed...")
+# Check if TTS server is working
+try:
+    subprocess.run('curl.exe -s http://localhost:5002', check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+except subprocess.CalledProcessError:
+    log.error('TTS server is not responding. Is it running?')
+    input("Press enter to proceed...")
+#
+
 clean_tmp()
 sounds_list = list_sounds()
+
 loop = asyncio.get_event_loop()
 try:
-    cancel_event = asyncio.Event()
-    asyncio.run(main(cancel_event, sounds_list))
-except PubSubListenTimeoutException:
-    print("main thread - Caught PubSubListenTimeoutException. Attempting to reconnect...")
+    loop.run_until_complete(main(sounds_list))
 except KeyboardInterrupt:
-    log.info("Caught keyboard interrupt. Canceling tasks...")
-    cancel_event.set()
+    log.info('Caught keyboard interrupt. Canceling tasks...')
+    for task in asyncio.all_tasks(loop):
+        task.cancel()
+    loop.run_until_complete(asyncio.gather(*asyncio.all_tasks(loop), return_exceptions=True))
+    loop.close()
