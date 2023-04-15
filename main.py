@@ -67,44 +67,39 @@ async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: di
 
 
 async def run_chat(sound_queue: asyncio.Queue, cancel_event):
-    try:
-        twitch = await Twitch(APP_ID, APP_SECRET)
-        auth = UserAuthenticator(twitch, USER_SCOPE)
-        user = await first(twitch.get_users(logins=TARGET_CHANNEL))
-
-        # Handle authentication
+    while True:
         try:
-            authenticated_twitch, expiration = await read_token(twitch)
-        except Exception as e:
-            log.error(e)
-            authenticated_twitch = await generate_token(twitch, auth)
+            twitch = await Twitch(APP_ID, APP_SECRET)
+            auth = UserAuthenticator(twitch, USER_SCOPE)
+            user = await first(twitch.get_users(logins=TARGET_CHANNEL))
 
-        # create chat instance
-        pubsub = PubSub(authenticated_twitch)
-        pubsub.start()
+            # Handle authentication
+            try:
+                authenticated_twitch, expiration = await read_token(twitch)
+            except Exception as e:
+                log.error(e)
+                authenticated_twitch = await generate_token(twitch, auth)
 
-        callback = partial(callback_wrapped, sound_queue)
-        uuid = await pubsub.listen_channel_points(user.id, callback)
+            # create chat instance
+            pubsub = PubSub(authenticated_twitch)
+            pubsub.start()
 
-        # Whispers for debug
-        # callback = partial(callback_wrapped_priv, sound_queue)
-        # uuid = await pubsub.listen_whispers(user.id, callback)
+            # callback = partial(callback_wrapped, sound_queue)
+            # uuid = await pubsub.listen_channel_points(user.id, callback)
 
-        print("Ready")
-        # Loop so function won't die
-        while True:
-            await asyncio.sleep(3600)
-            token = await twitch.get_refreshed_user_auth_token()
-            log.debug(f"Refreshing - {token}")
-            # TODO Re add saving token to file
-    except PubSubListenTimeoutException:
-                    log.warning("run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...")
-    except Exception as e:
-        log.error(f'Error: {e}')
-    # finally:
-    #     await pubsub.unlisten(uuid)
-    #     pubsub.stop()
-    #     await twitch.close()
+            # Whispers for debug
+            callback = partial(callback_wrapped_priv, sound_queue)
+            uuid = await pubsub.listen_whispers(user.id, callback)
+
+            print("Ready")
+            # Loop so function won't die
+            while True:
+                await asyncio.sleep(3600)
+                # TODO Re add saving token to file
+        except PubSubListenTimeoutException:
+            pubsub.stop()
+            await twitch.close()
+            print("run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...")
 
 
 async def main(cancel_event, sounds_list):
@@ -116,10 +111,7 @@ async def main(cancel_event, sounds_list):
     try:
         await asyncio.gather(chat_task, sound_task, return_exceptions=True)
     except PubSubListenTimeoutException:
-                log.warning("main - Caught PubSubListenTimeoutException. Attempting to reconnect...")
-    # finally:
-    #     chat_task.cancel()
-    #     sound_task.cancel()
+        print("main - Caught PubSubListenTimeoutException. Attempting to reconnect...")
 
 
 # Main thread
@@ -130,11 +122,7 @@ try:
     cancel_event = asyncio.Event()
     asyncio.run(main(cancel_event, sounds_list))
 except PubSubListenTimeoutException:
-                log.warning("main thread - Caught PubSubListenTimeoutException. Attempting to reconnect...")
+    print("main thread - Caught PubSubListenTimeoutException. Attempting to reconnect...")
 except KeyboardInterrupt:
     log.info("Caught keyboard interrupt. Canceling tasks...")
     cancel_event.set()
-# finally:
-#     log.info("Cleaning up...")
-#     loop.run_until_complete(loop.shutdown_asyncgens())
-#     loop.close()
