@@ -3,6 +3,6 @@ To create voice model I used https://github.com/coqui-ai/TTS using VITS tts mode
 
 - Requires ffmpeg.exe to exist in directory or in PATH
 
-- Requires sounds in wav format to exist in sounds directory (no subfolders)
-
 - Requires TTS Server running on http://localhost:5002
+
+- Optionally you can put sounds in .wav format to `sounds` directory. They will be played using pattern like this `[150]` sound named `150.wav` will be played
