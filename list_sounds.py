@@ -6,6 +6,8 @@ import sys
 log = logging.getLogger()
 if "debug".lower() in sys.argv:
     log_level = logging.DEBUG
+elif "info".lower() in sys.argv:
+    log_level = logging.INFO
 else:
     log_level = logging.ERROR
 
@@ -19,5 +21,5 @@ def list_sounds():
     for filename in listdir(sounds_directory):
         if filename.endswith('.wav'):
             sounds.append(f'[{filename[:-4]}]')
-    log.debug(f'Succesfully loaded all sounds - {len(sounds)} sounds')
+    log.info(f'Succesfully loaded all sounds - {len(sounds)} sounds')
     return sounds

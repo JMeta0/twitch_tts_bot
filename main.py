@@ -15,7 +15,7 @@ from twitchAPI.pubsub import PubSub
 from twitchAPI.twitch import Twitch
 from twitchAPI.types import AuthScope
 from uuid import UUID
-
+from twitchAPI.types import PubSubListenTimeoutException
 
 # Meme config
 cfg = parsed_config()
@@ -33,6 +33,8 @@ system = system()
 log = logging.getLogger()
 if "debug".lower() in sys.argv:
     log_level = logging.DEBUG
+elif "info".lower() in sys.argv:
+    log_level = logging.INFO
 else:
     log_level = logging.ERROR
 
@@ -95,14 +97,14 @@ async def run_chat(sound_queue: asyncio.Queue, cancel_event):
             token = await twitch.get_refreshed_user_auth_token()
             log.debug(f"Refreshing - {token}")
             # TODO Re add saving token to file
-    except KeyboardInterrupt:
-        cancel_event.set()
+    except PubSubListenTimeoutException:
+                    log.warning("run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...")
     except Exception as e:
         log.error(f'Error: {e}')
-    finally:
-        await pubsub.unlisten(uuid)
-        pubsub.stop()
-        await twitch.close()
+    # finally:
+    #     await pubsub.unlisten(uuid)
+    #     pubsub.stop()
+    #     await twitch.close()
 
 
 async def main(cancel_event, sounds_list):
@@ -113,9 +115,11 @@ async def main(cancel_event, sounds_list):
 
     try:
         await asyncio.gather(chat_task, sound_task, return_exceptions=True)
-    finally:
-        chat_task.cancel()
-        sound_task.cancel()
+    except PubSubListenTimeoutException:
+                log.warning("main - Caught PubSubListenTimeoutException. Attempting to reconnect...")
+    # finally:
+    #     chat_task.cancel()
+    #     sound_task.cancel()
 
 
 # Main thread
@@ -125,10 +129,12 @@ loop = asyncio.get_event_loop()
 try:
     cancel_event = asyncio.Event()
     asyncio.run(main(cancel_event, sounds_list))
+except PubSubListenTimeoutException:
+                log.warning("main thread - Caught PubSubListenTimeoutException. Attempting to reconnect...")
 except KeyboardInterrupt:
     log.info("Caught keyboard interrupt. Canceling tasks...")
     cancel_event.set()
-finally:
-    log.info("Cleaning up...")
-    loop.run_until_complete(loop.shutdown_asyncgens())
-    loop.close()
+# finally:
+#     log.info("Cleaning up...")
+#     loop.run_until_complete(loop.shutdown_asyncgens())
+#     loop.close()

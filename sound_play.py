@@ -15,6 +15,8 @@ import urllib
 log = logging.getLogger()
 if "debug".lower() in sys.argv:
     log_level = logging.DEBUG
+elif "info".lower() in sys.argv:
+    log_level = logging.INFO
 else:
     log_level = logging.ERROR
 
