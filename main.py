@@ -31,6 +31,7 @@ SOUND_CAP = cfg.tts.sound_cap
 system = system()
 
 # Logs
+logging.getLogger('sox').setLevel(logging.ERROR)
 log = logging.getLogger()
 if 'debug'.lower() in sys.argv:
     log_level = logging.DEBUG
