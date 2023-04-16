@@ -38,6 +38,7 @@ async def sound_play(sound_queue, sounds_list):
             wavs = []
             log.debug(f"working on sentences - {sentence_array}")
 
+            #
             for index, sentence in enumerate(sentence_array):
                 if sentence_array[index] in sounds_list:
                     log.debug("found sentence in sounds array")
@@ -49,12 +50,11 @@ async def sound_play(sound_queue, sounds_list):
                     if not bool(re.match(".*(\.|!|\?)$", sentence)):
                         sentence += "."
 
-                    log.debug(sentence)
-
+                    log.debug(f'sentence is {sentence}')
                     url = f"http://localhost:5002/api/tts?text={urllib.parse.quote_plus(sentence)}"
                     os.system(f'curl.exe -s {url} -o tmp/{index}.wav')
-
                     wavs.append(f'tmp/{index}.wav')
+
             log.debug(f"sound_play - files are {wavs}")
 
             combined_sounds = AudioSegment.empty()
