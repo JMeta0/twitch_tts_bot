@@ -6,6 +6,7 @@ if not path.exists(config_path):
     print(f'{config_path} not found - copy and input correct data to config file!')
     input("Press enter to proceed...")
 
+
 def parsed_config():
     # Meme config
     class Twitch_config(manager.Section):
@@ -16,6 +17,7 @@ def parsed_config():
 
     class Tts_config(manager.Section):
         reward_name = fields.Field()
+        sound_cap = fields.IntField()
 
     class Config(manager.Config):
         twitch = Twitch_config()

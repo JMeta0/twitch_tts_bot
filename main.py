@@ -1,7 +1,7 @@
+import sys
+import os
 import asyncio
 import logging
-import sys
-from os import makedirs, path
 from clean_tmp import clean_tmp
 from functools import partial
 from list_sounds import list_sounds
@@ -27,6 +27,7 @@ TARGET_CHANNEL = cfg.twitch.channel
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS, AuthScope.WHISPERS_READ]
 AUTH_FILE = cfg.twitch.auth_file
 REWARD_NAME = cfg.tts.reward_name
+SOUND_CAP = cfg.tts.sound_cap
 system = system()
 
 # Logs
@@ -120,10 +121,10 @@ async def main(sounds_list):
 # Check folders and config existance
 dir_paths = ["sounds", "tmp"]
 for dir_path in dir_paths:
-    if not path.exists(dir_path):
-        makedirs(dir_path)
-if not path.exists('ffmpeg.exe'):
-    log.error('ffmpeg.exe not found - add to path or download ffmpeg to this folder!')
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+if not os.path.exists('sox/sox.exe'):
+    log.error('SoX not found - add to path or download SoX to sox folder!')
     input("Press enter to proceed...")
 # Check if TTS server is working
 try:
