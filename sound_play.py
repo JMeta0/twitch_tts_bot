@@ -77,7 +77,6 @@ async def sound_play(sound_queue, sounds_list):
                     os.system(f'curl.exe -s {url} -o tmp/{index}.wav')
                     wavs.append(f'tmp/{index}.wav')
 
-            # ADD {1} LOGIC HERE!
             log.debug(f"sound_play - files are {wavs}")
 
             combiner = sox.Combiner()
