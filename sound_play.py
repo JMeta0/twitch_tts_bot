@@ -19,7 +19,6 @@ SOUND_CAP = cfg.tts.sound_cap
 
 
 # Logs
-log = logging.getLogger()
 if "debug".lower() in sys.argv:
     log_level = logging.DEBUG
 elif "info".lower() in sys.argv:
@@ -27,26 +26,31 @@ elif "info".lower() in sys.argv:
 else:
     log_level = logging.ERROR
 
-logging.basicConfig(level=log_level, format="%(name)s - %(message)s", datefmt="%X")
+logging.basicConfig(level=log_level, format='%(name)s - %(message)s', datefmt='%X')
 system = system()
 
 if system == 'Windows':
     sox_path = r'sox'
     os.environ['PATH'] = sox_path + ';' + os.environ['PATH']
+    curl_command = "curl.exe"
+    import sox
+
+else:
+    curl_command = "curl"
     import sox
 
 
 async def sound_play(sound_queue, sounds_list):
     while True:
         try:
-            log.debug('sound_play - waiting for item in queue.')
+            logging.debug('sound_play - waiting for item in queue.')
 
             message = await asyncio.wait_for(sound_queue.get(), timeout=1)
-            log.debug(f'sound_play - Executing "{message}" from queue. Queue size: {sound_queue.qsize()}')
+            logging.debug(f'sound_play - Executing "{message}" from queue. Queue size: {sound_queue.qsize()}')
 
             # Split message and potential sounds,
             sentence_array = split_message(message)
-            log.debug(f"sound_play - sentence_array - {sentence_array}")
+            logging.debug(f"sound_play - sentence_array - {sentence_array}")
             wavs = []
 
             # Get TTS sentences generated
@@ -55,17 +59,17 @@ async def sound_play(sound_queue, sounds_list):
                 # Check if name.wav exists in pattern - like 150.wav in sounds folder
                 if sentence_array[index] in sounds_list:
                     if sound_number <= SOUND_CAP:
-                        log.debug("sound_play - Found sentence in sounds array")
+                        logging.debug("sound_play - Found sentence in sounds array")
                         wavs.append(f'sounds/{sentence[1:-1]}.wav')
                         sound_number += 1
                     else:
-                        log.debug("sound_play - Capped sound numbers. Skipping")
+                        logging.debug("sound_play - Capped sound numbers. Skipping")
                         continue
 
                 # Check for filter pattern {numer of filter} eg. {1}
                 # elif any(filter_dict['name'] == sentence_array[index] for filter_dict in filters_list):
                 #     filter_value = next(filter_dict['value'] for filter_dict in filters_list if filter_dict['name'] == sentence_array[index])
-                #     log.debug(f'Filter pattern detected. Value: {filter_value}')
+                #     logging.debug(f'Filter pattern detected. Value: {filter_value}')
                 #     wavs.append(sentence_array[index])
                 # If it's normal sentence, send it to TTS server
                 else:
@@ -74,10 +78,10 @@ async def sound_play(sound_queue, sounds_list):
                         sentence += "."
 
                     url = f"http://localhost:5002/api/tts?text={urllib.parse.quote_plus(sentence)}"
-                    os.system(f'curl.exe -s {url} -o tmp/{index}.wav')
+                    os.system(f'{curl_command} -s {url} -o tmp/{index}.wav')
                     wavs.append(f'tmp/{index}.wav')
 
-            log.debug(f"sound_play - files are {wavs}")
+            logging.debug(f"sound_play - files are {wavs}")
 
             combiner = sox.Combiner()
 
@@ -88,16 +92,16 @@ async def sound_play(sound_queue, sounds_list):
 
             # Play
             if system == 'Windows':
-                log.debug(f'sound_play - Playing sound on {system}')
+                logging.debug(f'sound_play - Playing sound on {system}')
                 play('./output.wav')
                 os.remove('./output.wav')
             if system == 'Linux':
-                log.debug(f'sound_play - Playing sound on {system}')
+                logging.debug(f'sound_play - Playing sound on {system}')
                 os.system('aplay -q ./output.wav')
                 os.remove('./output.wav')
             clean_tmp()
             # Remove item from queue
             sound_queue.task_done()
-            log.debug(f'sound_play - Task done. Queue size: {sound_queue.qsize()}')
+            logging.debug(f'sound_play - Task done. Queue size: {sound_queue.qsize()}')
         except asyncio.TimeoutError:
             pass

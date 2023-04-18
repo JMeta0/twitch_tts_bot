@@ -57,7 +57,7 @@ async def read_token(twitch):
         try:
             token = auth.auth.token
             refresh_token = auth.auth.refresh_token
-            print(f'Successfully read {AUTH_FILE}')
+            print('Successfully read token')
         except (KeyError, MissingFieldError):
             print(f'{AUTH_FILE} is malformed')
 

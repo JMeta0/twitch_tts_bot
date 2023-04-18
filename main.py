@@ -16,6 +16,7 @@ from twitchAPI.twitch import Twitch
 from twitchAPI.types import AuthScope, PubSubListenTimeoutException
 from uuid import UUID
 import subprocess
+import json
 
 # Meme config
 cfg = parsed_config()
@@ -30,9 +31,13 @@ REWARD_NAME = cfg.tts.reward_name
 SOUND_CAP = cfg.tts.sound_cap
 system = system()
 
+if system == 'Windows':
+    curl_command = "curl.exe"
+else:
+    curl_command = "curl"
+
 # Logs
 logging.getLogger('sox').setLevel(logging.ERROR)
-log = logging.getLogger()
 if 'debug'.lower() in sys.argv:
     log_level = logging.DEBUG
 elif 'info'.lower() in sys.argv:
@@ -45,23 +50,25 @@ logging.basicConfig(level=log_level, format='%(name)s - %(message)s', datefmt='%
 
 async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
     try:
-        message = data['data']['redemption']['user_input']
-        sender = data['data']['redemption']['user']['display_name']
-        if data['data']['redemption']['reward']['title'] == REWARD_NAME:
+        callback = json.loads(json.dumps(data))
+        message = callback['data']['redemption']['user_input']
+        sender = callback['data']['redemption']['user']['display_name']
+        if callback['data']['redemption']['reward']['title'] == REWARD_NAME:
             print(f'{sender} said: {message}')
             await sound_queue.put(message)
-            log.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+            logging.debug(f'callback_wrapped - Added {message} to queue. Queue size: {sound_queue.qsize()}')
     except KeyError:
-        log.error('callback_wrapped - Error in message Body')
+        logging.error(f'callback_wrapped - Error in message Body - {callback}')
 
 
 async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
     try:
-        message = data['data_object']['body']
+        callback = json.loads(json.dumps(data))
+        message = callback['data_object']['body']
         await sound_queue.put(message)
-        log.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
+        logging.debug(f'callback_wrapped_priv - Added {message} to queue. Queue size: {sound_queue.qsize()}')
     except KeyError:
-        log.error('callback_wrapped_priv - Error in message Body')
+        logging.error(f'callback_wrapped - Error in message Body - {callback}')
 
 
 async def run_chat(sound_queue: asyncio.Queue):
@@ -78,7 +85,7 @@ async def run_chat(sound_queue: asyncio.Queue):
             try:
                 authenticated_twitch, _ = await read_token(twitch)
             except Exception as e:
-                log.error(e)
+                logging.error(e)
                 authenticated_twitch = await generate_token(twitch, auth)
 
             # create chat instance
@@ -99,7 +106,7 @@ async def run_chat(sound_queue: asyncio.Queue):
         except PubSubListenTimeoutException:
             pubsub.stop()
             await twitch.close()
-            log.error('run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...')
+            logging.error('run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...')
         except asyncio.CancelledError:
             pubsub.stop()
             await twitch.close()
@@ -125,15 +132,9 @@ for dir_path in dir_paths:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 if not os.path.exists('sox/sox.exe'):
-    log.error('SoX not found - add to path or download SoX to sox folder!')
+    logging.error('SoX not found - add to path or download SoX to sox folder!')
     input("Press enter to proceed...")
-# Check if TTS server is working
-try:
-    subprocess.run('curl.exe -s http://localhost:5002', check=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-except subprocess.CalledProcessError:
-    log.error('TTS server is not responding. Is it running?')
-    input("Press enter to proceed...")
-#
+
 
 clean_tmp()
 sounds_list = list_sounds()
@@ -142,7 +143,7 @@ loop = asyncio.get_event_loop()
 try:
     loop.run_until_complete(main(sounds_list))
 except KeyboardInterrupt:
-    log.info('Caught keyboard interrupt. Canceling tasks...')
+    logging.info('Caught keyboard interrupt. Canceling tasks...')
     for task in asyncio.all_tasks(loop):
         task.cancel()
     loop.run_until_complete(asyncio.gather(*asyncio.all_tasks(loop), return_exceptions=True))

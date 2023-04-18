@@ -1,1 +1,2 @@
 - fix random PubSubListenTimeoutException - asyncio - Task exception was never retrieved - pubsub.py:343
+- Add filters - maybe rewrite split_message.py to go letter by letter, find {int} til the end of the message, another {int} or {.}. Make new list if { } changes so new file is generated and pass them through correct filters somehow
