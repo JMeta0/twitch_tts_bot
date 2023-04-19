@@ -11,11 +11,10 @@ from platform import system
 from sound_play import sound_play
 from twitchAPI.helper import first
 from twitchAPI.oauth import UserAuthenticator
-from twitchAPI.pubsub import PubSub
+from twitchAPI.pubsub import PubSub, PubSubListenTimeoutException
 from twitchAPI.twitch import Twitch
-from twitchAPI.types import AuthScope, PubSubListenTimeoutException
+from twitchAPI.types import AuthScope
 from uuid import UUID
-import subprocess
 import json
 
 # Meme config
@@ -71,52 +70,73 @@ async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: di
         logging.error(f'callback_wrapped - Error in message Body - {callback}')
 
 
-async def run_chat(sound_queue: asyncio.Queue):
-    while True:
-        try:
-            twitch = await Twitch(APP_ID, APP_SECRET)
-            auth = UserAuthenticator(twitch, USER_SCOPE)
-            user = await first(twitch.get_users(logins=TARGET_CHANNEL))
+# Temp attempt to fix
+class CustomPubSub(PubSub):
+    def __init__(self, token: str, twitch, callback=None):
+        super().__init__(token)
+        self.callback = callback
+        self.twitch = twitch
 
-            # Save token on refresh
-            twitch.user_auth_refresh_callback = save_token
-
-            # Handle authentication
+    async def __handle_reconnect(self):
+        while True:
             try:
-                authenticated_twitch, _ = await read_token(twitch)
+                await self.__connect()
+            except PubSubListenTimeoutException:
+                logging.error('CustomPubSub - Caught PubSubListenTimeoutException. Restarting run_chat...')
+                self.stop()  # Stop pubsub
+                await self.twitch.close()  # Close twitch connection
+                if self.callback:
+                    self.callback()
+                break
             except Exception as e:
-                logging.error(e)
-                authenticated_twitch = await generate_token(twitch, auth)
+                logging.error(f'CustomPubSub - Unexpected error: {e}')
+                await asyncio.sleep(5)  # Sleep for a short time before retrying
+            else:
+                break
 
-            # create chat instance
-            pubsub = PubSub(authenticated_twitch)
-            pubsub.start()
 
-            # callback = partial(callback_wrapped, sound_queue)
-            # await pubsub.listen_channel_points(user.id, callback)
+async def start_run_chat(sound_queue):
+    task = asyncio.create_task(run_chat(sound_queue))
+    await task
 
-            # Whispers for debug
-            callback = partial(callback_wrapped_priv, sound_queue)
-            await pubsub.listen_whispers(user.id, callback)
 
-            print('Ready')
-            # Loop so function won't die
-            while True:
-                await asyncio.sleep(3600)
-        except PubSubListenTimeoutException:
-            pubsub.stop()
-            await twitch.close()
-            logging.error('run_chat - Caught PubSubListenTimeoutException. Attempting to reconnect...')
-        except asyncio.CancelledError:
-            pubsub.stop()
-            await twitch.close()
-            break
+async def run_chat(sound_queue: asyncio.Queue):
+    try:
+        twitch = await Twitch(APP_ID, APP_SECRET)
+        auth = UserAuthenticator(twitch, USER_SCOPE)
+        user = await first(twitch.get_users(logins=TARGET_CHANNEL))
+
+        # Save token on refresh
+        twitch.user_auth_refresh_callback = save_token
+
+        # Handle authentication
+        try:
+            authenticated_twitch, _ = await read_token(twitch)
+        except Exception as e:
+            logging.error(e)
+            authenticated_twitch = await generate_token(twitch, auth)
+
+        # create chat instance
+        pubsub = CustomPubSub(authenticated_twitch, twitch, start_run_chat)  # Pass the twitch object
+        pubsub.start()
+
+        # Whispers for debug
+        callback = partial(callback_wrapped_priv, sound_queue)
+        await pubsub.listen_whispers(user.id, callback)
+
+        print('Ready')
+        # Loop so function won't die
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pubsub.stop()
+        await twitch.close()
 
 
 async def main(sounds_list):
     sound_queue = asyncio.Queue()
 
-    chat_task = asyncio.create_task(run_chat(sound_queue))
+    chat_task = asyncio.create_task(start_run_chat(sound_queue))  # Call start_run_chat
     sound_task = asyncio.create_task(sound_play(sound_queue, sounds_list))
 
     tasks = [chat_task, sound_task]
