@@ -1,9 +1,11 @@
 from config_pyrser import manager, fields
 from os import path
+from logger import logger
+
 
 config_path = 'config.txt'
 if not path.exists(config_path):
-    print(f'{config_path} not found - copy and input correct data to config file!')
+    logger.error(f'{config_path} not found - copy and input correct data to config file!')
     input("Press enter to proceed...")
 
 
@@ -41,4 +43,4 @@ def parsed_tokens(path: str):
 
         return auth
     except AttributeError:
-        print(f'{path} is malformed')
+        logger.error(f'{path} is malformed')
