@@ -1,9 +1,10 @@
 import os
+import json
 import asyncio
-from logger import logger
 from clean_tmp import clean_tmp
 from functools import partial
 from list_sounds import list_sounds
+from logger import logger
 from oauth import generate_token, read_token, save_token
 from parsed_config import parsed_config
 from platform import system
@@ -14,7 +15,6 @@ from twitchAPI.pubsub import PubSub, PubSubListenTimeoutException
 from twitchAPI.twitch import Twitch
 from twitchAPI.types import AuthScope
 from uuid import UUID
-import json
 
 # Meme config
 cfg = parsed_config()

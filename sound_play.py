@@ -1,17 +1,17 @@
-import os
 import asyncio
-from logger import logger
 import logging
+import os
 import re
+import shutil
+import urllib
+import uuid
 from clean_tmp import clean_tmp
 from fix_numbers import fix_numbers
+from logger import logger
+from parsed_config import parsed_config
 from platform import system
 from simpleSound import play
 from split_message import split_message
-import urllib
-import shutil
-from parsed_config import parsed_config
-import uuid
 
 
 # Meme config
@@ -40,7 +40,7 @@ async def sound_play(sound_queue, sounds_list):
             logger.debug(f'sound_play - Executing "{message}" from queue. Queue size: {sound_queue.qsize()}')
 
             # Split message and potential sounds,
-            tokens = split_message(message)
+            tokens = await split_message(message)
             logger.debug(f'sound_play - tokens - {tokens}')
 
             wavs = []
@@ -97,7 +97,7 @@ async def process_segment(segment, effect_ids, sounds_list):
         if text.startswith('[') and text.endswith(']') and text in sounds_list:
             input_files.append(f'sounds/{text[1:-1]}.wav')
         else:
-            text = fix_numbers(text)
+            text = await fix_numbers(text)
             if not bool(re.match('.*(\.|!|\?)$', text)):
                 text += '.'
 

@@ -1,7 +1,7 @@
 import re
 
 
-def split_message(text):
+async def split_message(text):
     # Split the string into individual tokens (words, square brackets, curly brackets)
     tokens = re.findall(r'\[[^\]]*\]|\{[^\}]*\}|[^\[\]\{\} ]+', text)
 

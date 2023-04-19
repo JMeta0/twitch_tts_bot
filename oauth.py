@@ -1,10 +1,10 @@
-import json
 import os
+import json
+import requests
+from logger import logger
 from config_pyrser import MissingFieldError
 from parsed_config import parsed_config, parsed_tokens
-import requests
 from twitchAPI.types import AuthScope
-from logger import logger
 
 # Meme config
 cfg = parsed_config()

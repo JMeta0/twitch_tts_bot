@@ -1,6 +1,6 @@
-from config_pyrser import manager, fields
 from os import path
 from logger import logger
+from config_pyrser import manager, fields
 
 
 config_path = 'config.txt'
