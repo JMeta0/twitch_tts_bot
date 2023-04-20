@@ -35,9 +35,9 @@ logging.getLogger('sox').setLevel(logging.ERROR)
 
 
 async def sound_play(sound_queue, sounds_list):
+    logger.debug('sound_play - waiting for item in queue.')
     while True:
         try:
-            logger.debug('sound_play - waiting for item in queue.')
             message = await asyncio.wait_for(sound_queue.get(), timeout=1)
             logger.debug(f'sound_play - Executing "{message}" from queue. Queue size: {sound_queue.qsize()}')
 
@@ -121,7 +121,7 @@ async def process_segment(segment, effect_ids, sounds_list):
     return output_file
 
 
-async def apply_effect(effect_ids, input_files, output_file, max_applied=None):
+async def apply_effect(effect_ids, input_files, output_file):
     tfm = sox.Transformer()
 
     # Concatenate input files

@@ -10,9 +10,6 @@ from twitchAPI.types import AuthScope
 cfg = parsed_config()
 
 # Read config
-APP_ID = cfg.twitch.client_id
-APP_SECRET = cfg.twitch.client_secret
-TARGET_CHANNEL = cfg.twitch.channel
 USER_SCOPE = [AuthScope.CHAT_READ, AuthScope.CHANNEL_READ_REDEMPTIONS, AuthScope.WHISPERS_READ]
 AUTH_FILE = cfg.twitch.auth_file
 REWARD_NAME = cfg.tts.reward_name
