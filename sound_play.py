@@ -12,11 +12,13 @@ from parsed_config import parsed_config
 from platform import system
 from simpleSound import play
 from split_message import split_message
+from collections import Counter
 
 
 # Meme config
 cfg = parsed_config()
 SOUND_CAP = cfg.tts.sound_cap
+MAX_EFFECT_REPETITIONS = cfg.tts.max_effect_repetitions
 
 system = system()
 
@@ -119,7 +121,7 @@ async def process_segment(segment, effect_ids, sounds_list):
     return output_file
 
 
-async def apply_effect(effect_ids, input_files, output_file):
+async def apply_effect(effect_ids, input_files, output_file, max_applied=None):
     tfm = sox.Transformer()
 
     # Concatenate input files
@@ -130,50 +132,57 @@ async def apply_effect(effect_ids, input_files, output_file):
     elif len(input_files) == 1:
         shutil.copy(input_files[0], 'tmp/combined_input.wav')
 
-    for effect_id in effect_ids:
-        if effect_id == 1:
-            # room echo
-            tfm.reverb(50, room_scale=25)
-        elif effect_id == 2:
-            # hall echo
-            tfm.reverb(75, room_scale=75, wet_gain=1)
-        elif effect_id == 3:
-            # outside echo
-            tfm.reverb(5, room_scale=5)
-        elif effect_id == 4:
-            # pitch down
-            tfm.pitch(-6)  # half an octave
-        elif effect_id == 5:
-            # pitch up
-            tfm.pitch(6)  # half an octave
-        elif effect_id == 6:
-            # telephone
-            tfm.highpass(800).gain(2)
-        elif effect_id == 7:
-            # muffled
-            tfm.lowpass(1200).gain(1)
-        elif effect_id == 8:
-            # quieter
-            tfm.gain(-20)
-        elif effect_id == 9:
-            # ghost
-            (tfm
-                .pad(0.5, 0.5)
-                .reverse()
-                .reverb(reverberance=50, wet_gain=1)
-                .reverse()
-                .reverb())
-        elif effect_id == 10:
-            # chorus
-            tfm.chorus()
-        elif effect_id == 11:
-            # slow down
-            tfm.tempo(0.5)
-        elif effect_id == 12:
-            # speed up
-            tfm.tempo(1.5)
-        else:
-            continue
+    effect_counts = Counter(effect_ids)
+    if MAX_EFFECT_REPETITIONS is not None:
+        for effect_id, count in effect_counts.items():
+            if count > MAX_EFFECT_REPETITIONS:
+                effect_counts[effect_id] = MAX_EFFECT_REPETITIONS
+
+    for effect_id, count in effect_counts.items():
+        for _ in range(count):
+            if effect_id == 1:
+                # room echo
+                tfm.reverb(50, room_scale=25)
+            elif effect_id == 2:
+                # hall echo
+                tfm.reverb(75, room_scale=75, wet_gain=1)
+            elif effect_id == 3:
+                # outside echo
+                tfm.reverb(5, room_scale=5)
+            elif effect_id == 4:
+                # pitch down
+                tfm.pitch(-5)  # half an octave
+            elif effect_id == 5:
+                # pitch up
+                tfm.pitch(5)  # half an octave
+            elif effect_id == 6:
+                # telephone
+                tfm.highpass(800).gain(2)
+            elif effect_id == 7:
+                # muffled
+                tfm.lowpass(1200).gain(1)
+            elif effect_id == 8:
+                # quieter
+                tfm.gain(-20)
+            elif effect_id == 9:
+                # ghost
+                (tfm
+                    .pad(0.5, 0.5)
+                    .reverse()
+                    .reverb(reverberance=50, wet_gain=1)
+                    .reverse()
+                    .reverb())
+            elif effect_id == 10:
+                # chorus
+                tfm.chorus()
+            elif effect_id == 11:
+                # slow down
+                tfm.tempo(0.5)
+            elif effect_id == 12:
+                # speed up
+                tfm.tempo(1.5)
+            else:
+                continue
 
     tfm.build('tmp/combined_input.wav', output_file)
 

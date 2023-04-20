@@ -20,6 +20,7 @@ def parsed_config():
     class Tts_config(manager.Section):
         reward_name = fields.Field()
         sound_cap = fields.IntField()
+        max_effect_repetitions = fields.IntField()
 
     class Config(manager.Config):
         twitch = Twitch_config()

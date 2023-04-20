@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import asyncio
 from clean_tmp import clean_tmp
@@ -39,36 +40,31 @@ async def callback_wrapped(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -
     try:
         callback = json.loads(json.dumps(data))
 
-        if callback['data']['redemption']['reward']['title'] == REWARD_NAME:
-            message = callback['data']['redemption']['user_input']
-            sender = callback['data']['redemption']['user']['display_name']
-            logger.info(f'{sender} said: {message}')
-            await sound_queue.put(message)
-            logger.debug(f'callback_wrapped - Added "{message}" to queue. Queue size: {sound_queue.qsize()}')
+        if 'whispers'.lower() in sys.argv:
+            if "body" in callback['data_object']:
+                message = callback['data_object']['body']
+                logger.info(f'message: {message}')
+                await sound_queue.put(message)
+                logger.debug(f'callback_wrapped_priv - Added "{message}" to queue. Queue size: {sound_queue.qsize()}')
+        else:
+            if callback['data']['redemption']['reward']['title'] == REWARD_NAME:
+                message = callback['data']['redemption']['user_input']
+                sender = callback['data']['redemption']['user']['display_name']
+                logger.info(f'{sender} said: {message}')
+                await sound_queue.put(message)
+                logger.debug(f'callback_wrapped - Added "{message}" to queue. Queue size: {sound_queue.qsize()}')
     except KeyError:
         logger.error(f'callback_wrapped - Error in message Body - {callback}')
 
 
-async def callback_wrapped_priv(sound_queue: asyncio.Queue, uuid: UUID, data: dict) -> None:
-    try:
-        callback = json.loads(json.dumps(data))
-
-        if "body" in callback['data_object']:
-            message = callback['data_object']['body']
-            await sound_queue.put(message)
-            logger.debug(f'callback_wrapped_priv - Added "{message}" to queue. Queue size: {sound_queue.qsize()}')
-    except KeyError:
-        logger.error(f'callback_wrapped - Error in message Body - {callback}')
-
-
-# Temp attempt to fix
+# Temp attempt to fix PubSubListenTimeoutException
 class CustomPubSub(PubSub):
     def __init__(self, token: str, twitch, callback=None):
         super().__init__(token)
         self.callback = callback
         self.twitch = twitch
 
-    async def __handle_reconnect(self):
+    async def _PubSub__handle_reconnect(self):
         while True:
             try:
                 await self.__connect()
@@ -87,6 +83,7 @@ class CustomPubSub(PubSub):
 
 
 async def start_run_chat(sound_queue):
+    await asyncio.sleep(1)
     task = asyncio.create_task(run_chat(sound_queue))
     await task
 
@@ -107,13 +104,15 @@ async def run_chat(sound_queue: asyncio.Queue):
             logger.error(e)
             authenticated_twitch = await generate_token(twitch, auth)
 
-        # create chat instance
         pubsub = CustomPubSub(authenticated_twitch, twitch, start_run_chat)  # Pass the twitch object
         pubsub.start()
 
-        # Whispers for debug
-        callback = partial(callback_wrapped_priv, sound_queue)
-        await pubsub.listen_whispers(user.id, callback)
+        if 'whispers'.lower() in sys.argv:
+            callback = partial(callback_wrapped, sound_queue)
+            await pubsub.listen_whispers(user.id, callback)
+        else:
+            callback = partial(callback_wrapped, sound_queue)
+            await pubsub.listen_channel_points(user.id, callback)
 
         logger.info('Ready')
         # Loop so function won't die
@@ -138,7 +137,7 @@ async def main(sounds_list):
 # Main thread #
 
 # Check folders and config existance
-dir_paths = ["sounds", "tmp", "logs"]
+dir_paths = ["sounds", "tmp"]
 for dir_path in dir_paths:
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -150,7 +149,8 @@ if not os.path.exists('sox/sox.exe'):
 clean_tmp()
 sounds_list = list_sounds()
 
-loop = asyncio.get_event_loop()
+# loop = asyncio.get_event_loop() python 3.11 fix
+loop = asyncio.new_event_loop()
 try:
     loop.run_until_complete(main(sounds_list))
 except KeyboardInterrupt:
