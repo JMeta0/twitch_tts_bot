@@ -5,6 +5,7 @@ import re
 import shutil
 import urllib
 import uuid
+import subprocess
 from clean_tmp import clean_tmp
 from fix_numbers import fix_numbers
 from logger import logger
@@ -105,8 +106,11 @@ async def process_segment(segment, effect_ids, sounds_list):
 
             url = f'http://localhost:5002/api/tts?text={urllib.parse.quote_plus(text)}'
             temp_filename = f'tmp/{uuid.uuid4()}.wav'
-            os.system(f'{curl_command} -s {url} -o {temp_filename}')
-            input_files.append(temp_filename)
+            result = subprocess.run([curl_command, '-s', url, '-o', temp_filename], capture_output=True, text=True)
+            if result.returncode == 0:
+                input_files.append(temp_filename)
+            else:
+                logger.error('Error while making request to TTS server. Is it running?')
 
     logger.debug(f'process_segment - input_files: {input_files}')
     output_file = f'tmp/{uuid.uuid4()}.wav'
@@ -194,6 +198,10 @@ def async_play(file_path):
         os.remove(file_path)
     elif system == 'Linux':
         logger.debug(f'sound_play - Playing sound on {system}')
-        os.system('aplay -q ' + file_path)
-        os.remove(file_path)
+        result = subprocess.run(['aplay', '-q', file_path])
+        if result.returncode == 0:
+            os.remove(file_path)
+        else:
+            logger.error(f'Error while playing sound on Linux: {result.stderr}')
+
     clean_tmp()

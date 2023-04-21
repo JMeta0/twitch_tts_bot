@@ -63,7 +63,7 @@ def setup_logging(debug_mode):
 
     start_time = time.strftime("%Y-%m-%d_%H-%M-%S")
     filename = os.path.join(logs_folder, f"logs_{start_time}.log")
-    file_handler = logging.FileHandler(filename)
+    file_handler = logging.FileHandler(filename, encoding='utf-8')
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
