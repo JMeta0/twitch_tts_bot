@@ -1,7 +1,7 @@
 from num2words import num2words
 
 
-def fix_numbers(text):
+async def fix_numbers(text):
     symbols = []
     symbol_buffer = ''
     for symbol in text:

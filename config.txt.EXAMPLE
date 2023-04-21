@@ -5,3 +5,5 @@ client_secret = 1234clientsecret1234
 auth_file = tokens.tmp
 [tts]
 reward_name = TTS Reward Name
+sound_cap = 20
+max_effect_repetitions = 3

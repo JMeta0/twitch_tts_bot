@@ -1,7 +1,12 @@
+from os import path
+from logger import logger
 from config_pyrser import manager, fields
 
 
 config_path = 'config.txt'
+if not path.exists(config_path):
+    logger.error(f'{config_path} not found - copy and input correct data to config file!')
+    input("Press enter to proceed...")
 
 
 def parsed_config():
@@ -14,6 +19,8 @@ def parsed_config():
 
     class Tts_config(manager.Section):
         reward_name = fields.Field()
+        sound_cap = fields.IntField()
+        max_effect_repetitions = fields.IntField()
 
     class Config(manager.Config):
         twitch = Twitch_config()
@@ -37,4 +44,4 @@ def parsed_tokens(path: str):
 
         return auth
     except AttributeError:
-        print(f'{path} is malformed')
+        logger.error(f'{path} is malformed')
