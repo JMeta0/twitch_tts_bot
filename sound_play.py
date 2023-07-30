@@ -20,6 +20,7 @@ from collections import Counter
 cfg = parsed_config()
 SOUND_CAP = cfg.tts.sound_cap
 MAX_EFFECT_REPETITIONS = cfg.tts.max_effect_repetitions
+current_sound_cap = 0
 
 system = system()
 
@@ -53,20 +54,20 @@ async def sound_play(sound_queue, sounds_list):
             for token in tokens:
                 if re.match(r'\{\d+\}', token):
                     if segment:
-                        wavs.append(await process_segment(segment, effect_ids, sounds_list))
+                        wavs.append(await process_segment(segment, effect_ids, sounds_list, current_sound_cap))
                         segment = []
                     effect_ids.append(int(token[1:-1]))
                 elif token == '{.}':
 
                     if segment:
-                        wavs.append(await process_segment(segment, effect_ids, sounds_list))
+                        wavs.append(await process_segment(segment, effect_ids, sounds_list, current_sound_cap))
                         segment = []
                     effect_ids = []
                 else:
                     segment.append(token)
             logger.debug(f'sound_play - processing last segment: {segment}')
             if segment:
-                wavs.append(await process_segment(segment, effect_ids, sounds_list))
+                wavs.append(await process_segment(segment, effect_ids, sounds_list, current_sound_cap))
                 logger.debug(f'sound_play - processed last segment, resulting wav: {wavs}')
 
             logger.debug(f'sound_play - files are {wavs}')
@@ -92,13 +93,15 @@ async def sound_play(sound_queue, sounds_list):
             logger.error(f'Error: {e}')
 
 
-async def process_segment(segment, effect_ids, sounds_list):
+async def process_segment(segment, effect_ids, sounds_list, current_sound_cap):
     logger.debug(f'process_segment - segment: {segment}, effect_ids: {effect_ids}')
 
     input_files = []
     for index, text in enumerate(segment):
         if text.startswith('[') and text.endswith(']') and text in sounds_list:
-            input_files.append(f'sounds/{text[1:-1]}.wav')
+            if current_sound_cap <= SOUND_CAP-1:
+                input_files.append(f'sounds/{text[1:-1]}.wav')
+                current_sound_cap+=1
         else:
             text = await fix_numbers(text)
             if not bool(re.match('.*(\.|!|\?)$', text)):
