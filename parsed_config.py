@@ -12,6 +12,7 @@ if not path.exists(config_path):
 def parsed_config():
     # Meme config
     class Twitch_config(manager.Section):
+        default_runner = fields.Field()
         channel = fields.Field()
         client_id = fields.Field()
         client_secret = fields.Field()
