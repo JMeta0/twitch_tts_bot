@@ -43,6 +43,7 @@ class TwitchTTSBot:
         self.app_secret = self.cfg.twitch.client_secret
         self.target_channel = self.cfg.twitch.channel
         self.auth_file = self.cfg.twitch.auth_file
+        self.mock_user_id = self.cfg.twitch.mock_user_id
         self.reward_name = self.cfg.tts.reward_name
 
         # Auth scopes
@@ -153,8 +154,8 @@ class TwitchTTSBot:
             if 'local'.lower() in sys.argv:
                 base_url = 'http://localhost:8080/mock/'
                 auth_base_url = 'http://localhost:8080/auth/'
-                connection_url = 'ws://127.0.0.1:8080/ws'
-                subscription_url = 'http://127.0.0.1:8080/'
+                connection_url = 'ws://127.0.0.1:4000/ws'
+                subscription_url = 'http://127.0.0.1:4000/'
             else:
                 base_url = 'https://api.twitch.tv/helix/'
                 auth_base_url = 'https://id.twitch.tv/oauth2/'
@@ -170,7 +171,7 @@ class TwitchTTSBot:
                 if 'local'.lower() in sys.argv:
                     self.twitch.auto_refresh_auth = False
                     authenticated_twitch = UserAuthenticator(self.twitch, self.eventsub_scope, auth_base_url=auth_base_url)
-                    token = await authenticated_twitch.mock_authenticate('91072779')  # Use mock user ID
+                    token = await authenticated_twitch.mock_authenticate(self.mock_user_id)
                     await self.twitch.set_user_authentication(token, self.eventsub_scope)
                     user = await first(self.twitch.get_users())
                 # Production mode authentication

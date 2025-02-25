@@ -3,6 +3,7 @@ default_runner = eventsub
 channel = my_channel_name
 client_id = 1234clientid1234
 client_secret = 1234clientsecret1234
+mock_user_id = 37989705
 auth_file = tokens.tmp
 [tts]
 reward_name = TTS Reward Name
