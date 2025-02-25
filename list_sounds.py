@@ -16,15 +16,27 @@ def list_sounds():
     sounds = []
     sounds_directory = "sounds"
     logger.info('Loading sounds...')
-    for filename in os.listdir(sounds_directory):
-        if filename.endswith('.wav'):
-            fullpath = f'{sounds_directory}/{filename}'
+    
+    # Check if sounds directory exists
+    if not os.path.exists(sounds_directory):
+        logger.warning(f'Sounds directory {sounds_directory} does not exist. Creating it.')
+        os.makedirs(sounds_directory)
+        
+    try:
+        for filename in os.listdir(sounds_directory):
+            if filename.endswith('.wav'):
+                fullpath = f'{sounds_directory}/{filename}'
 
-            # Check number of channels and sample rate
-            if sox.file_info.channels(fullpath) == 1 & int(sox.file_info.sample_rate(fullpath) == 22050.0):
-                sounds.append(f'[{filename[:-4]}]')
-            else:
-                logger.error(f'File {fullpath} is not mono channel or has wrong samplerate.')
+                try:
+                    # Check number of channels and sample rate
+                    if sox.file_info.channels(fullpath) == 1 and sox.file_info.sample_rate(fullpath) == 22050.0:
+                        sounds.append(f'[{filename[:-4]}]')
+                    else:
+                        logger.error(f'File {fullpath} is not mono channel or has wrong samplerate.')
+                except Exception as e:
+                    logger.error(f'Error analyzing sound file {fullpath}: {e}')
+    except Exception as e:
+        logger.error(f'Error listing sounds directory: {e}')
 
-    logger.info(f'Succesfully loaded all sounds - {len(sounds)} sounds')
+    logger.info(f'Successfully loaded all sounds - {len(sounds)} sounds')
     return sounds
